@@ -957,6 +957,9 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
                 <div class="status-item {{ 'status-online' if system_status.internet else 'status-offline' }}">
                     🌐 Internet: {{ 'Verbunden' if system_status.internet else 'Getrennt' }}
                 </div>
+                <div class="status-item status-online" id="public-ip-status" style="cursor: pointer;" onclick="copyPublicIP()" title="Klicken zum Kopieren">
+                    🌍 <span id="public-ip">Lade...</span>
+                </div>
                 <div class="status-item status-online" id="speed-status" style="min-width: 195px;">
                     📊 <span id="download-speed">0.0</span> ↓ <span id="upload-speed">0.0</span> ↑ Mbit/s
                 </div>
@@ -2377,10 +2380,70 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
             });
         }
 
+        // Public IP Functions
+        async function loadPublicIP() {
+            try {
+                const response = await fetch('/api/get_public_ip');
+                const data = await response.json();
+                
+                const ipElement = document.getElementById('public-ip');
+                const statusElement = document.getElementById('public-ip-status');
+                
+                if (data.success && data.ip) {
+                    ipElement.textContent = data.ip;
+                    statusElement.classList.add('status-online');
+                    statusElement.classList.remove('status-offline');
+                } else {
+                    ipElement.textContent = 'Nicht verfügbar';
+                    statusElement.classList.add('status-offline');
+                    statusElement.classList.remove('status-online');
+                }
+            } catch (error) {
+                console.error('Error loading public IP:', error);
+                document.getElementById('public-ip').textContent = 'Fehler';
+            }
+        }
+        
+        function copyPublicIP() {
+            const ipText = document.getElementById('public-ip').textContent;
+            
+            if (ipText === 'Lade...' || ipText === 'Nicht verfügbar' || ipText === 'Fehler') {
+                showToast('Keine IP zum Kopieren verfügbar', 'warning');
+                return;
+            }
+            
+            // Use fallback for older browsers or insecure contexts
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(ipText).then(() => {
+                    showToast(`IP ${ipText} kopiert!`, 'success');
+                }).catch(err => {
+                    showToast('Fehler beim Kopieren', 'error');
+                });
+            } else {
+                // Fallback method
+                const textarea = document.createElement('textarea');
+                textarea.value = ipText;
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.select();
+                try {
+                    document.execCommand('copy');
+                    showToast(`IP ${ipText} kopiert!`, 'success');
+                } catch (err) {
+                    showToast('Fehler beim Kopieren', 'error');
+                }
+                document.body.removeChild(textarea);
+            }
+        }
+
         // Load internet speed
         
         // Initialize dashboard with WebSocket
         console.log('🚀 OpenPiRouter Dashboard initialized');
+        
+        // Load Public IP once on startup
+        loadPublicIP();
         
         // WebSocket handles all real-time updates
         // No additional polling needed
@@ -3909,6 +3972,38 @@ def api_themes_screenshot(theme_name):
     except Exception as e:
         print(f"Error serving screenshot: {e}")
         return '', 404
+
+@app.route('/api/get_public_ip')
+def api_get_public_ip():
+    """API: Get public IP address"""
+    try:
+        # Try multiple services for reliability
+        services = [
+            'https://api.ipify.org?format=json',
+            'https://api64.ipify.org?format=json',
+            'https://ifconfig.me/ip',
+        ]
+        
+        for service in services:
+            try:
+                if 'json' in service:
+                    response = urllib.request.urlopen(service, timeout=5)
+                    data = json.loads(response.read().decode('utf-8'))
+                    ip = data.get('ip', '')
+                else:
+                    response = urllib.request.urlopen(service, timeout=5)
+                    ip = response.read().decode('utf-8').strip()
+                
+                if ip:
+                    return jsonify({'success': True, 'ip': ip})
+            except Exception as e:
+                print(f"Failed to get IP from {service}: {e}")
+                continue
+        
+        return jsonify({'success': False, 'error': 'Could not retrieve public IP'})
+    except Exception as e:
+        print(f"Error getting public IP: {e}")
+        return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == "__main__":
     # Initialize theme system
