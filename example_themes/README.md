@@ -4,7 +4,7 @@ This directory contains example themes that you can use as templates for creatin
 
 ## Available Themes
 
-### 1. Default Theme (`openpirouter_default_theme_with_screenshot.zip`)
+### 1. Default Theme (`openpirouter_default_theme.zip`)
 The standard OpenPiRouter dashboard theme with purple gradient header and modern card-based layout.
 
 **Features:**
