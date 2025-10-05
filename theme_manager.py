@@ -41,8 +41,8 @@ def list_themes():
     for theme_name in os.listdir(THEMES_DIR):
         theme_path = os.path.join(THEMES_DIR, theme_name)
         
-        # Skip if not a directory or if it's the symlink
-        if not os.path.isdir(theme_path) or theme_name == 'active_theme':
+        # Skip if not a directory, if it's the symlink, or if it's a backup
+        if not os.path.isdir(theme_path) or theme_name == 'active_theme' or theme_name.endswith('_backup') or 'backup_' in theme_name:
             continue
         
         meta_file = os.path.join(theme_path, 'meta.json')
