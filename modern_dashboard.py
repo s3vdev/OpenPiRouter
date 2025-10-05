@@ -39,7 +39,7 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Caching system
 cache = {}
-cache_timeout = 5  # seconds
+cache_timeout = 10  # seconds - increased for better performance
 
 def cached_function(func):
     """Decorator for caching function results"""
@@ -83,30 +83,43 @@ def background_update_task():
             update_count += 1
             print(f"📡 Sending update #{update_count}")
             
-            # Get fresh data (bypass cache for real-time updates)
-            status_data = get_system_status.__wrapped__()
-            stats_data = get_system_stats.__wrapped__()
+            # Get cached data (faster) instead of bypassing cache
+            status_data = get_system_status()
+            stats_data = get_system_stats()
             
-            # Get WiFi info
-            wifi_data = get_current_wifi_data()
-            speed_data = get_internet_speed_data()
+            # Get WiFi info with timeout protection
+            try:
+                wifi_data = get_current_wifi_data()
+            except:
+                wifi_data = {'connected': False}
             
-            # Get connected clients
-            ap_info = get_ap_info()
+            # Skip speed data on every update (expensive)
+            if update_count % 5 == 0:  # Only every 5th update
+                try:
+                    speed_data = get_internet_speed_data()
+                    socketio.emit('speed_data', speed_data)
+                except:
+                    pass
             
-            # Send updates to all connected clients
+            # Get connected clients with timeout
+            try:
+                ap_info = get_ap_info()
+                socketio.emit('client_list', {'clients': ap_info.get('clients', []),'count': len(ap_info.get('clients', []))})
+            except:
+                socketio.emit('client_list', {'clients': [], 'count': 0})
+            
+            # Send core updates
             socketio.emit('system_status', status_data)
             socketio.emit('system_stats', stats_data)
             socketio.emit('wifi_status', wifi_data)
-            socketio.emit('speed_data', speed_data)
-            socketio.emit('client_list', {'clients': ap_info.get('clients', []),'count': len(ap_info.get('clients', []))})
             
-            print(f"✅ Update #{update_count} sent successfully")
+            if update_count % 10 == 0:  # Log every 10th update
+                print(f"✅ Update #{update_count} sent successfully")
             
         except Exception as e:
             print(f"❌ Error in background update #{update_count}: {e}")
         
-        time.sleep(3)  # Update every 3 seconds
+        time.sleep(5)  # Update every 5 seconds instead of 3
 
 def get_current_wifi_data():
     """Get current WiFi connection data with smart timeout handling"""
@@ -1116,6 +1129,7 @@ THEME_BASE_HTML = """<html lang="de">
                 <div class="form-group">
                     <label>RJ45 Modus:</label>
                     <select id="eth0_mode">
+                        <option value="auto" {{ 'selected' if eth0_mode == 'auto' else '' }}>Auto-Erkennung (Empfohlen)</option>
                         <option value="receive" {{ 'selected' if eth0_mode == 'receive' else '' }}>Internet-Empfang (wie wlan0)</option>
                         <option value="output" {{ 'selected' if eth0_mode == 'output' else '' }}>Internet-Ausgabe (wie wlan1)</option>
                     </select>
@@ -2610,7 +2624,7 @@ DASHBOARD_TEMPLATE = THEME_BASE_HTML.replace(
 )
 
 
-def sh(cmd, timeout=10):
+def sh(cmd, timeout=5):
     """Execute shell command with timeout"""
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, shell=True)
@@ -2635,7 +2649,7 @@ def get_system_status():
     try:
         # First check active connections (more reliable)
         result = subprocess.run(["nmcli", "-t", "-f", "name,device,state", "con", "show", "--active"], 
-                              capture_output=True, timeout=15)
+                              capture_output=True, timeout=5)
         if result.returncode == 0:
             for line in result.stdout.decode().splitlines():
                 if "wlan0" in line and ("activated" in line or "connected" in line):
@@ -2645,7 +2659,7 @@ def get_system_status():
         # Fallback: check device status
         if not status['wifi']:
             result = subprocess.run(["nmcli", "-t", "-f", "device,state", "dev", "status"], 
-                                  capture_output=True, timeout=10)
+                                  capture_output=True, timeout=3)
             if result.returncode == 0:
                 for line in result.stdout.decode().splitlines():
                     if line.startswith("wlan0:") and ("connected" in line or "activated" in line):
@@ -2697,8 +2711,8 @@ def get_system_stats():
     }
     
     try:
-        # CPU usage
-        stats['cpu'] = round(psutil.cpu_percent(interval=1))
+        # CPU usage (faster, no interval)
+        stats['cpu'] = round(psutil.cpu_percent())
         
         # Memory usage
         memory = psutil.virtual_memory()
@@ -2779,10 +2793,10 @@ def get_system_stats():
     return stats
 
 def get_internet_config():
-    """Get current internet configuration"""
+    """Get current internet configuration with smart LAN/WLAN detection"""
     config = {
         'wlan0_internet_enabled': True,   # wlan0 = Internet-Empfang (default)
-        'eth0_mode': 'output'             # eth0 = Internet-Ausgabe (default, wie wlan1)
+        'eth0_mode': 'auto'               # eth0 = Auto-detect (LAN input or output)
     }
     
     try:
@@ -2795,6 +2809,19 @@ def get_internet_config():
         if os.path.exists('/etc/pi-config/eth0-mode'):
             with open('/etc/pi-config/eth0-mode', 'r') as f:
                 config['eth0_mode'] = f.read().strip()
+        
+        # Auto-detect eth0 mode based on current network state
+        if config['eth0_mode'] == 'auto':
+            # Check if eth0 has internet connectivity
+            try:
+                result = subprocess.run(["ping", "-c", "1", "-W", "2", "-I", "eth0", "1.1.1.1"], 
+                                      capture_output=True, timeout=3)
+                if result.returncode == 0:
+                    config['eth0_mode'] = 'receive'  # eth0 has internet, use as input
+                else:
+                    config['eth0_mode'] = 'output'   # eth0 no internet, use as output
+            except:
+                config['eth0_mode'] = 'output'  # Default to output if detection fails
                 
     except:
         pass
@@ -2906,12 +2933,26 @@ def get_ap_info():
         
         # Create client list from DHCP leases
         for mac, data in dhcp_clients.items():
+            # Determine interface based on IP range or other factors
+            interface = 'wlan1'  # default
+            if data['ip'].startswith('192.168.50.'):
+                # Check if bridge exists to determine if it's LAN or WLAN
+                try:
+                    bridge_result = subprocess.run(["ip", "link", "show", "br0"], 
+                                                 capture_output=True, text=True, timeout=2)
+                    if bridge_result.returncode == 0:
+                        interface = 'br0'  # Bridge exists, client is on LAN
+                    else:
+                        interface = 'wlan1'  # No bridge, client is on WLAN
+                except:
+                    interface = 'wlan1'
+            
             clients.append({
                 'mac': mac,
                 'ip': data['ip'],
                 'hostname': data['hostname'],
                 'signal': '',
-                'interface': 'wlan1'
+                'interface': interface
             })
         
         # Enrich with WiFi signal strength from wlan1
@@ -3532,7 +3573,7 @@ def api_toggle_ap_visibility():
 
 @app.route('/api/toggle_wlan0_internet', methods=['POST'])
 def api_toggle_wlan0_internet():
-    """API: Toggle wlan0 Internet-Eingang"""
+    """API: Toggle wlan0 Internet-Eingang with smart routing"""
     try:
         data = request.get_json()
         enabled = data.get('enabled', True)
@@ -3540,6 +3581,23 @@ def api_toggle_wlan0_internet():
         # Save config
         with open('/etc/pi-config/wlan0-internet-enabled', 'w') as f:
             f.write('1' if enabled else '0')
+        
+        # Smart routing: if wlan0 is enabled, check if eth0 should be disabled
+        if enabled:
+            # Check current eth0 mode
+            eth0_mode = 'output'  # default
+            try:
+                if os.path.exists('/etc/pi-config/eth0-mode'):
+                    with open('/etc/pi-config/eth0-mode', 'r') as f:
+                        eth0_mode = f.read().strip()
+            except:
+                pass
+            
+            # If eth0 is in receive mode and wlan0 is enabled, switch eth0 to output
+            if eth0_mode == 'receive':
+                with open('/etc/pi-config/eth0-mode', 'w') as f:
+                    f.write('output')
+                print("🔧 wlan0 enabled, eth0 switched to output mode to prevent conflicts")
         
         if enabled:
             # Enable wlan0 internet routing
@@ -3571,14 +3629,41 @@ def api_toggle_wlan0_internet():
 
 @app.route('/api/update_eth0_mode', methods=['POST'])
 def api_update_eth0_mode():
-    """API: Update eth0 mode (receive or output)"""
+    """API: Update eth0 mode (auto, receive or output) with smart routing"""
     try:
         data = request.get_json()
-        mode = data.get('mode', 'output')
+        mode = data.get('mode', 'auto')
         
         # Save config
         with open('/etc/pi-config/eth0-mode', 'w') as f:
             f.write(mode)
+        
+        # Smart routing logic to prevent conflicts
+        if mode == 'receive':
+            # If eth0 is set to receive, disable wlan0 internet to prevent conflicts
+            with open('/etc/pi-config/wlan0-internet-enabled', 'w') as f:
+                f.write('0')
+            print("🔧 eth0 set to receive mode, wlan0 internet disabled to prevent conflicts")
+        elif mode == 'auto':
+            # Auto-detect: if eth0 has internet, use it; otherwise use wlan0
+            try:
+                result = subprocess.run(["ping", "-c", "1", "-W", "2", "-I", "eth0", "1.1.1.1"], 
+                                      capture_output=True, timeout=3)
+                if result.returncode == 0:
+                    # eth0 has internet, disable wlan0
+                    with open('/etc/pi-config/wlan0-internet-enabled', 'w') as f:
+                        f.write('0')
+                    print("🔧 Auto-detect: eth0 has internet, wlan0 disabled")
+                else:
+                    # eth0 no internet, enable wlan0
+                    with open('/etc/pi-config/wlan0-internet-enabled', 'w') as f:
+                        f.write('1')
+                    print("🔧 Auto-detect: eth0 no internet, wlan0 enabled")
+            except:
+                # Fallback to wlan0
+                with open('/etc/pi-config/wlan0-internet-enabled', 'w') as f:
+                    f.write('1')
+                print("🔧 Auto-detect failed, fallback to wlan0")
         
         if mode == 'receive':
             # eth0 = Internet-Empfang (wie wlan0)
@@ -3589,12 +3674,24 @@ def api_update_eth0_mode():
             except:
                 pass
             
+            # Stop and disable eth0 AP mode service
+            try:
+                sh("systemctl stop eth0-ap-mode.service")
+                sh("systemctl disable eth0-ap-mode.service")
+            except:
+                pass
+            
             # Restore wlan1 original configuration
             sh("ip addr add 192.168.50.1/24 dev wlan1")
             sh("ip link set wlan1 up")
             
-            # Configure eth0 as WAN interface (no static IP, DHCP)
-            sh("ip addr flush dev eth0")
+            # Remove secondary IP from eth0 if it exists
+            try:
+                sh("ip addr del 192.168.50.254/24 dev eth0")
+            except:
+                pass
+            
+            # Configure eth0 as WAN interface (let NetworkManager handle it)
             sh("ip link set eth0 up")
             
             # Clean up bridge-related iptables rules
@@ -3605,11 +3702,18 @@ def api_update_eth0_mode():
             except:
                 pass
             
-            # Remove secondary IP from eth0 if it exists
-            try:
-                sh("ip addr del 192.168.50.254/24 dev eth0")
-            except:
-                pass
+            # Clean up eth0 AP mode rules
+            for i in range(5):
+                try:
+                    sh("iptables -t nat -D POSTROUTING -s 192.168.50.0/24 -o wlan0 -j MASQUERADE")
+                    sh("iptables -D FORWARD -i eth0 -s 192.168.50.0/24 -o wlan0 -j ACCEPT")
+                    sh("iptables -D FORWARD -i wlan0 -o eth0 -d 192.168.50.0/24 -j ACCEPT")
+                    sh("iptables -D FORWARD -i eth0 -o wlan1 -s 192.168.50.0/24 -d 192.168.50.0/24 -j ACCEPT")
+                except:
+                    break
+            
+            # Save iptables rules
+            sh("netfilter-persistent save")
             
             # Restore original dnsmasq configuration (only wlan1)
             with open('/etc/dnsmasq.d/pi-repeater.conf', 'w') as f:
@@ -3624,10 +3728,15 @@ expand-hosts
 ''')
             sh("systemctl restart dnsmasq")
             
+            # Remove bridge from hostapd
+            sh("sed -i 's/^interface=.*/interface=wlan1/' /etc/hostapd/hostapd.conf")
+            sh("sed -i '/^bridge=/d' /etc/hostapd/hostapd.conf")
+            sh("systemctl restart hostapd")
+            
         elif mode == 'output':
             # eth0 = Internet-Ausgabe (wie wlan1)
-            # Configure eth0 to give internet to clients (but keep it as WAN backup)
-            # eth0 stays on main network for management, but also serves 192.168.50.0/24
+            # Configure eth0 to give internet to clients
+            # Create persistent configuration via systemd service
             
             # Clean up any old bridge
             try:
@@ -3643,28 +3752,73 @@ expand-hosts
                 pass
             sh("ip link set wlan1 up")
             
-            # Ensure eth0 is up first
-            sh("ip link set eth0 up")
-            
-            # Wait a moment for DHCP to settle (eth0 might still be getting DHCP)
-            import time
-            time.sleep(1)
-            
-            # Add secondary IP to eth0 for local network (keeps primary DHCP IP!)
-            # First check if eth0 has a primary IP
-            eth0_ips = sh("ip -4 addr show eth0 | grep 'inet ' | awk '{print $2}'")
-            if not eth0_ips or '192.168.50' in eth0_ips:
-                # No DHCP IP yet or only has our static IP, try to renew
-                sh("dhclient -r eth0")
-                time.sleep(1)
-                sh("dhclient eth0")
-                time.sleep(2)
-            
-            # Now add our secondary IP (if not already there)
+            # Create bridge br0 with wlan1 and eth0
+            # This allows both interfaces to share the same 192.168.50.0/24 network
             try:
-                sh("ip addr add 192.168.50.254/24 dev eth0")
-            except:
-                pass  # Already exists
+                # Remove any existing bridge first
+                sh("ip link set br0 down 2>/dev/null || true")
+                sh("ip link delete br0 2>/dev/null || true")
+                
+                # Create new bridge
+                sh("ip link add name br0 type bridge")
+                sh("ip link set br0 up")
+                sh("ip addr add 192.168.50.1/24 dev br0")
+                
+                # Add wlan1 to bridge (remove its IP first)
+                sh("ip addr flush dev wlan1 2>/dev/null || true")
+                sh("ip link set wlan1 master br0")
+                sh("ip link set wlan1 up")
+                
+                # Add eth0 to bridge (remove its IP first)
+                sh("ip addr flush dev eth0 2>/dev/null || true")
+                sh("ip link set eth0 master br0")
+                sh("ip link set eth0 up")
+                
+                print("🔧 Bridge br0 created successfully with wlan1 and eth0")
+            except Exception as e:
+                print(f"❌ Bridge creation failed: {e}")
+                # Fallback: just use wlan1 without bridge
+                sh("ip addr add 192.168.50.1/24 dev wlan1 2>/dev/null || true")
+                sh("ip link set wlan1 up")
+            
+            # Configure dnsmasq to listen on br0 instead of wlan1
+            # This allows DHCP to work for both WiFi and Ethernet clients
+            dnsmasq_config = """interface=br0
+bind-interfaces
+dhcp-range=192.168.50.50,192.168.50.150,12h
+dhcp-option=3,192.168.50.1
+dhcp-option=6,192.168.50.1
+port=0
+domain=lan
+expand-hosts
+"""
+            with open('/etc/dnsmasq.d/pi-repeater.conf', 'w') as f:
+                f.write(dnsmasq_config)
+            
+            # Restart dnsmasq to apply new configuration
+            sh("systemctl restart dnsmasq")
+            
+            # Create a systemd service to maintain bridge on boot
+            service_content = '''[Unit]
+Description=Configure eth0+wlan1 bridge for OpenPiRouter AP mode
+After=network.target
+Before=hostapd.service dnsmasq.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/bash -c 'ip link add name br0 type bridge || true; ip link set br0 up; ip addr add 192.168.50.1/24 dev br0 || true; ip addr flush dev wlan1; ip link set wlan1 master br0; ip link set wlan1 up; ip addr flush dev eth0; ip link set eth0 master br0; ip link set eth0 up; echo "interface=br0\\nbind-interfaces\\ndhcp-range=192.168.50.50,192.168.50.150,12h\\ndhcp-option=3,192.168.50.1\\ndhcp-option=6,192.168.50.1\\nport=0\\ndomain=lan\\nexpand-hosts" > /etc/dnsmasq.d/pi-repeater.conf; sed -i "s/^interface=.*/interface=wlan1/" /etc/hostapd/hostapd.conf; grep -q "^bridge=" /etc/hostapd/hostapd.conf || echo "bridge=br0" >> /etc/hostapd/hostapd.conf; sed -i "s/^bridge=.*/bridge=br0/" /etc/hostapd/hostapd.conf'
+ExecStop=/bin/bash -c 'ip link set wlan1 nomaster; ip link set eth0 nomaster; ip link set br0 down; ip link delete br0'
+
+[Install]
+WantedBy=multi-user.target
+'''
+            with open('/tmp/eth0-ap-mode.service', 'w') as f:
+                f.write(service_content)
+            sh("mv /tmp/eth0-ap-mode.service /etc/systemd/system/")
+            sh("systemctl daemon-reload")
+            sh("systemctl enable eth0-ap-mode.service")
+            sh("systemctl restart eth0-ap-mode.service")
             
             # Configure routing: eth0 can now also give internet to 192.168.50.0/24 clients
             # Remove old bridge rules if any
@@ -3675,28 +3829,39 @@ expand-hosts
             except:
                 pass
             
-            # Add eth0 as output interface (in addition to wlan1)
-            # Clients on eth0 can reach internet via wlan0
-            try:
-                sh("iptables -t nat -A POSTROUTING -s 192.168.50.0/24 -o wlan0 -j MASQUERADE")
-                sh("iptables -A FORWARD -i eth0 -s 192.168.50.0/24 -o wlan0 -j ACCEPT")
-                sh("iptables -A FORWARD -i wlan0 -o eth0 -d 192.168.50.0/24 -j ACCEPT")
-            except:
-                pass
+            # Clean up any duplicate rules first
+            for i in range(5):  # Remove up to 5 duplicates
+                try:
+                    sh("iptables -t nat -D POSTROUTING -s 192.168.50.0/24 -o wlan0 -j MASQUERADE")
+                    sh("iptables -D FORWARD -i eth0 -s 192.168.50.0/24 -o wlan0 -j ACCEPT")
+                    sh("iptables -D FORWARD -i wlan0 -o eth0 -d 192.168.50.0/24 -j ACCEPT")
+                except:
+                    break
             
-            # Update dnsmasq to listen on BOTH wlan1 AND eth0
-            with open('/etc/dnsmasq.d/pi-repeater.conf', 'w') as f:
-                f.write('''interface=wlan1
-interface=eth0
-bind-interfaces
-dhcp-range=192.168.50.10,192.168.50.200,12h
-dhcp-option=3,192.168.50.1
-dhcp-option=6,8.8.8.8,8.8.4.4
-port=0
-domain=lan
-expand-hosts
-''')
-            sh("systemctl restart dnsmasq")
+            # Add eth0 as output interface (in addition to wlan1)
+            sh("iptables -t nat -A POSTROUTING -s 192.168.50.0/24 -o wlan0 -j MASQUERADE")
+            sh("iptables -A FORWARD -i eth0 -s 192.168.50.0/24 -o wlan0 -j ACCEPT")
+            sh("iptables -A FORWARD -i wlan0 -o eth0 -d 192.168.50.0/24 -j ACCEPT")
+            
+            # Also allow eth0 -> eth0 for local subnet communication
+            sh("iptables -A FORWARD -i eth0 -o wlan1 -s 192.168.50.0/24 -d 192.168.50.0/24 -j ACCEPT")
+            
+            # Save iptables rules
+            sh("netfilter-persistent save")
+            
+            # Update hostapd to use bridge
+            try:
+                sh("sed -i 's/^interface=.*/interface=wlan1/' /etc/hostapd/hostapd.conf")
+                sh("grep -q '^bridge=' /etc/hostapd/hostapd.conf || echo 'bridge=br0' >> /etc/hostapd/hostapd.conf")
+                sh("sed -i 's/^bridge=.*/bridge=br0/' /etc/hostapd/hostapd.conf")
+                sh("systemctl restart hostapd")
+                print("🔧 hostapd configured to use bridge br0")
+            except Exception as e:
+                print(f"❌ hostapd configuration failed: {e}")
+                # Fallback: use wlan1 without bridge
+                sh("sed -i 's/^interface=.*/interface=wlan1/' /etc/hostapd/hostapd.conf")
+                sh("sed -i '/^bridge=/d' /etc/hostapd/hostapd.conf")
+                sh("systemctl restart hostapd")
         
         return jsonify({'success': True})
     except Exception as e:
