@@ -4,15 +4,30 @@ This directory contains example themes that you can use as templates for creatin
 
 ## Available Themes
 
-### Default Theme (`openpirouter_default_theme_with_screenshot.zip`)
+### 1. Default Theme (`openpirouter_default_theme_with_screenshot.zip`)
 The standard OpenPiRouter dashboard theme with purple gradient header and modern card-based layout.
 
 **Features:**
 - Clean, modern design
-- Purple gradient color scheme
+- Purple gradient color scheme (#667eea to #764ba2)
+- Light background with white cards
 - Responsive card layout
 - Real-time WebSocket updates
 - Mobile-friendly
+
+**Screenshot included:** Yes
+
+### 2. Dark Theme (`openpirouter_dark_theme.zip`)
+Modern dark theme with glassmorphism effects and blue/purple accents.
+
+**Features:**
+- Dark slate background (#0f172a)
+- Glassmorphism cards with backdrop blur
+- Indigo/Violet color scheme (#6366f1 to #8b5cf6)
+- Glowing hover effects and shadows
+- Dark mode optimized for night use
+- Enhanced contrast for better readability
+- Smooth animations and transitions
 
 **Screenshot included:** Yes
 
