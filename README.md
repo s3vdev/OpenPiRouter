@@ -27,6 +27,11 @@ OpenPiRouter is a complete router solution that turns your Raspberry Pi into a f
 
 *Powerful theme system - upload custom dashboards, preview themes, and switch instantly*
 
+### Dark Theme
+![Dark Theme](screenshots/dark-theme.png)
+
+*Modern dark theme with glassmorphism effects - perfect for night use*
+
 ---
 
 ## ✨ Features
@@ -69,7 +74,8 @@ OpenPiRouter is a complete router solution that turns your Raspberry Pi into a f
 - **Theme Manager**: Easy theme switching with preview images
 - **Export/Import**: Download current theme as template
 - **One-Click Activation**: Switch themes instantly
-- **Example Themes**: Pre-built themes to get started
+- **2 Built-in Themes**: Default (light) and Dark (glassmorphism)
+- **Example Themes**: Pre-built themes ready to use
 - **Full Customization**: Complete control over HTML/CSS/JS
 
 ---
