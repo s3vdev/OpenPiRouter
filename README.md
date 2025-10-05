@@ -22,6 +22,11 @@ OpenPiRouter is a complete router solution that turns your Raspberry Pi into a f
 
 *Built-in WiFi scanner with signal strength visualization and one-click connect*
 
+### Theme Manager
+![Theme Manager](screenshots/theme-manager.png)
+
+*Powerful theme system - upload custom dashboards, preview themes, and switch instantly*
+
 ---
 
 ## ✨ Features
