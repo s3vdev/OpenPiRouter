@@ -946,8 +946,8 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
                         </div>
                     </div>
                     <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-                        <button class="btn btn-danger" onclick="disconnectWifi()">🔴 Trennen</button>
-                        <button class="btn" onclick="showWifiModal()">🔍 WLAN Scannen</button>
+                        <button class="btn btn-danger" onclick="disconnectWifi()">Trennen</button>
+                        <button class="btn" onclick="showWifiModal()">WLAN Scannen</button>
                     </div>
                     <hr style="margin: 20px 0;">
                 </div>
@@ -996,9 +996,9 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
                 
                 <!-- Button Grid 2x2 -->
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0;">
-                    <button class="btn btn-primary" onclick="updateAP()">💾 AP Aktualisieren</button>
-                    <button class="btn btn-success" onclick="showQRCode()">📱 QR-Code Anzeigen</button>
-                    <button class="btn btn-warning" onclick="restartAP()">🔄 AP Neustart</button>
+                    <button class="btn btn-primary" onclick="updateAP()">AP Aktualisieren</button>
+                    <button class="btn btn-success" onclick="showQRCode()">QR-Code Anzeigen</button>
+                    <button class="btn btn-warning" onclick="restartAP()">AP Neustart</button>
                 </div>
             </div>
 
@@ -1026,7 +1026,7 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
                     </select>
                 </div>
                 
-                <button class="btn" onclick="updateEth0Mode()">💾 RJ45 Modus Aktualisieren</button>
+                <button class="btn" onclick="updateEth0Mode()">RJ45 Modus Aktualisieren</button>
             </div>
 
             <!-- Pi-hole -->
@@ -1053,7 +1053,7 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
                     </label>
                     <span style="margin-left: 10px;">Pi-hole {{ 'Aktiviert' if system_status.pihole else 'Deaktiviert' }}</span>
                 </div>
-                <button class="btn" onclick="openPiHoleAdmin()">🔧 Pi-hole Admin</button>
+                <button class="btn" onclick="openPiHoleAdmin()">Pi-hole Admin</button>
             </div>
 
             <!-- Connected Clients -->
