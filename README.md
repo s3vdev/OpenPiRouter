@@ -10,11 +10,17 @@ OpenPiRouter is a complete router solution that turns your Raspberry Pi into a f
 
 ---
 
-## 📸 Screenshot
+## 📸 Screenshots
 
+### Main Dashboard
 ![OpenPiRouter Dashboard](screenshots/dashboard.png)
 
 *Modern, responsive web dashboard with real-time updates via WebSocket*
+
+### WiFi Scanner
+![WiFi Scanner](screenshots/wifi-scanner.png)
+
+*Built-in WiFi scanner with signal strength visualization and one-click connect*
 
 ---
 
