@@ -3605,13 +3605,19 @@ def api_update_eth0_mode():
             except:
                 pass
             
-            # Restore original dnsmasq configuration
+            # Remove secondary IP from eth0 if it exists
+            try:
+                sh("ip addr del 192.168.50.254/24 dev eth0")
+            except:
+                pass
+            
+            # Restore original dnsmasq configuration (only wlan1)
             with open('/etc/dnsmasq.d/pi-repeater.conf', 'w') as f:
                 f.write('''interface=wlan1
 bind-interfaces
 dhcp-range=192.168.50.10,192.168.50.200,12h
 dhcp-option=3,192.168.50.1
-dhcp-option=6,192.168.50.1
+dhcp-option=6,8.8.8.8,8.8.4.4
 port=0
 domain=lan
 expand-hosts
@@ -3620,43 +3626,72 @@ expand-hosts
             
         elif mode == 'output':
             # eth0 = Internet-Ausgabe (wie wlan1)
-            # Create bridge br0 and add both wlan1 and eth0 to it
-            # First create bridge if it doesn't exist
+            # Configure eth0 to give internet to clients (but keep it as WAN backup)
+            # eth0 stays on main network for management, but also serves 192.168.50.0/24
+            
+            # Clean up any old bridge
             try:
-                sh("ip link add name br0 type bridge")
+                sh("ip link set br0 down")
+                sh("ip link delete br0")
             except:
                 pass
-            sh("ip link set br0 up")
-            sh("ip addr add 192.168.50.1/24 dev br0")
             
-            # Add wlan1 to bridge
-            sh("ip addr flush dev wlan1")
+            # Ensure wlan1 has its IP
             try:
-                sh("brctl addif br0 wlan1")
+                sh("ip addr add 192.168.50.1/24 dev wlan1")
             except:
                 pass
             sh("ip link set wlan1 up")
             
-            # Add eth0 to bridge
-            sh("ip addr flush dev eth0")
-            try:
-                sh("brctl addif br0 eth0")
-            except:
-                pass
+            # Ensure eth0 is up first
             sh("ip link set eth0 up")
             
-            # Configure routing for bridge
-            sh("iptables -t nat -A POSTROUTING -o br0 -j MASQUERADE")
-            sh("iptables -A FORWARD -i br0 -o wlan0 -j ACCEPT")
-            sh("iptables -A FORWARD -i wlan0 -o br0 -j ACCEPT")
+            # Wait a moment for DHCP to settle (eth0 might still be getting DHCP)
+            import time
+            time.sleep(1)
             
-            # Update dnsmasq to use bridge instead of wlan1
+            # Add secondary IP to eth0 for local network (keeps primary DHCP IP!)
+            # First check if eth0 has a primary IP
+            eth0_ips = sh("ip -4 addr show eth0 | grep 'inet ' | awk '{print $2}'")
+            if not eth0_ips or '192.168.50' in eth0_ips:
+                # No DHCP IP yet or only has our static IP, try to renew
+                sh("dhclient -r eth0")
+                time.sleep(1)
+                sh("dhclient eth0")
+                time.sleep(2)
+            
+            # Now add our secondary IP (if not already there)
+            try:
+                sh("ip addr add 192.168.50.254/24 dev eth0")
+            except:
+                pass  # Already exists
+            
+            # Configure routing: eth0 can now also give internet to 192.168.50.0/24 clients
+            # Remove old bridge rules if any
+            try:
+                sh("iptables -t nat -D POSTROUTING -o br0 -j MASQUERADE")
+                sh("iptables -D FORWARD -i br0 -o wlan0 -j ACCEPT")
+                sh("iptables -D FORWARD -i wlan0 -o br0 -j ACCEPT")
+            except:
+                pass
+            
+            # Add eth0 as output interface (in addition to wlan1)
+            # Clients on eth0 can reach internet via wlan0
+            try:
+                sh("iptables -t nat -A POSTROUTING -s 192.168.50.0/24 -o wlan0 -j MASQUERADE")
+                sh("iptables -A FORWARD -i eth0 -s 192.168.50.0/24 -o wlan0 -j ACCEPT")
+                sh("iptables -A FORWARD -i wlan0 -o eth0 -d 192.168.50.0/24 -j ACCEPT")
+            except:
+                pass
+            
+            # Update dnsmasq to listen on BOTH wlan1 AND eth0
             with open('/etc/dnsmasq.d/pi-repeater.conf', 'w') as f:
-                f.write('''interface=br0
+                f.write('''interface=wlan1
+interface=eth0
 bind-interfaces
 dhcp-range=192.168.50.10,192.168.50.200,12h
 dhcp-option=3,192.168.50.1
-dhcp-option=6,192.168.50.1
+dhcp-option=6,8.8.8.8,8.8.4.4
 port=0
 domain=lan
 expand-hosts
