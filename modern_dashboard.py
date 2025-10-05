@@ -995,10 +995,10 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
                 </div>
                 
                 <!-- Button Grid -->
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 20px 0;">
-                    <button class="btn btn-primary" onclick="updateAP()">Aktualisieren</button>
-                    <button class="btn btn-success" onclick="showQRCode()">QR-Code</button>
-                    <button class="btn btn-warning" onclick="restartAP()">Neustart</button>
+                <div style="display: flex; gap: 10px; margin: 20px 0; flex-wrap: wrap;">
+                    <button class="btn btn-primary" onclick="updateAP()" style="flex: 1; min-width: 140px;">Speichern</button>
+                    <button class="btn btn-success" onclick="showQRCode()" style="flex: 1; min-width: 140px;">QR-Code</button>
+                    <button class="btn btn-warning" onclick="restartAP()" style="flex: 1; min-width: 140px;">Neustart</button>
                 </div>
             </div>
 
