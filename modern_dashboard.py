@@ -269,7 +269,10 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
         
         /* SweetAlert modal - above theme modal */
         .swal-top-modal {
-            z-index: 10000000 !important;
+            z-index: 99999999 !important;
+        }
+        .swal2-container {
+            z-index: 99999999 !important;
         }
         
         /* System Menu Modal */
@@ -2180,26 +2183,27 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
         }
         
         async function activateTheme(themeName) {
+            // Hide theme modal IMMEDIATELY (synchronously)
+            const themeModal = document.getElementById('themeModal');
+            themeModal.style.visibility = 'hidden';
+            themeModal.style.opacity = '0';
+            themeModal.style.pointerEvents = 'none';
+            
             try {
-                // Hide theme modal temporarily
-                const themeModal = document.getElementById('themeModal');
-                themeModal.style.display = 'none';
-                
                 const result = await Swal.fire({
                     title: 'Theme aktivieren?',
                     text: `Möchtest du das Theme "${themeName}" aktivieren? Das Dashboard wird neu geladen.`,
                     icon: 'question',
                     showCancelButton: true,
                     confirmButtonText: 'Ja, aktivieren',
-                    cancelButtonText: 'Abbrechen',
-                    customClass: {
-                        container: 'swal-top-modal'
-                    }
+                    cancelButtonText: 'Abbrechen'
                 });
                 
                 // Show theme modal again if user cancels
                 if (!result.isConfirmed) {
-                    themeModal.style.display = 'block';
+                    themeModal.style.visibility = 'visible';
+                    themeModal.style.opacity = '1';
+                    themeModal.style.pointerEvents = 'auto';
                     return;
                 }
                 
@@ -2216,12 +2220,17 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
                     setTimeout(() => location.reload(), 1500);
                 } else {
                     showToast(data.error || 'Fehler beim Aktivieren', 'error');
-                    themeModal.style.display = 'block';
+                    themeModal.style.visibility = 'visible';
+                    themeModal.style.opacity = '1';
+                    themeModal.style.pointerEvents = 'auto';
                 }
             } catch (error) {
                 console.error('Error activating theme:', error);
                 showToast('Fehler beim Aktivieren des Themes', 'error');
-                document.getElementById('themeModal').style.display = 'block';
+                const themeModal = document.getElementById('themeModal');
+                themeModal.style.visibility = 'visible';
+                themeModal.style.opacity = '1';
+                themeModal.style.pointerEvents = 'auto';
             }
         }
         
@@ -2286,6 +2295,12 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
         }
         
         async function deleteTheme(themeName) {
+            // Hide theme modal IMMEDIATELY (synchronously)
+            const themeModal = document.getElementById('themeModal');
+            themeModal.style.visibility = 'hidden';
+            themeModal.style.opacity = '0';
+            themeModal.style.pointerEvents = 'none';
+            
             try {
                 const result = await Swal.fire({
                     title: 'Theme löschen?',
@@ -2297,25 +2312,41 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
                     cancelButtonText: 'Abbrechen'
                 });
                 
-                if (result.isConfirmed) {
-                    const response = await fetch('/api/themes/delete', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({theme_name: themeName})
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        showToast('Theme gelöscht', 'success');
-                        loadThemes();
-                    } else {
-                        showToast(data.error || 'Fehler beim Löschen', 'error');
-                    }
+                // Show theme modal again if user cancels
+                if (!result.isConfirmed) {
+                    themeModal.style.visibility = 'visible';
+                    themeModal.style.opacity = '1';
+                    themeModal.style.pointerEvents = 'auto';
+                    return;
+                }
+                
+                const response = await fetch('/api/themes/delete', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({theme_name: themeName})
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('Theme gelöscht', 'success');
+                    loadThemes();
+                    themeModal.style.visibility = 'visible';
+                    themeModal.style.opacity = '1';
+                    themeModal.style.pointerEvents = 'auto';
+                } else {
+                    showToast(data.error || 'Fehler beim Löschen', 'error');
+                    themeModal.style.visibility = 'visible';
+                    themeModal.style.opacity = '1';
+                    themeModal.style.pointerEvents = 'auto';
                 }
             } catch (error) {
                 console.error('Error deleting theme:', error);
                 showToast('Fehler beim Löschen des Themes', 'error');
+                const themeModal = document.getElementById('themeModal');
+                themeModal.style.visibility = 'visible';
+                themeModal.style.opacity = '1';
+                themeModal.style.pointerEvents = 'auto';
             }
         }
         
