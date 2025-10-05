@@ -994,11 +994,11 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
                     </select>
                 </div>
                 
-                <!-- Button Grid 2x2 -->
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0;">
-                    <button class="btn btn-primary" onclick="updateAP()">AP Aktualisieren</button>
-                    <button class="btn btn-success" onclick="showQRCode()">QR-Code Anzeigen</button>
-                    <button class="btn btn-warning" onclick="restartAP()">AP Neustart</button>
+                <!-- Button Grid -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 20px 0;">
+                    <button class="btn btn-primary" onclick="updateAP()">Aktualisieren</button>
+                    <button class="btn btn-success" onclick="showQRCode()">QR-Code</button>
+                    <button class="btn btn-warning" onclick="restartAP()">Neustart</button>
                 </div>
             </div>
 
