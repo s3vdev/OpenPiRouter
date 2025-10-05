@@ -5,8 +5,16 @@ import psutil
 import re
 import functools
 from pathlib import Path
-from flask import Flask, render_template_string, request, redirect, url_for, send_file, jsonify, session
+from flask import Flask, render_template_string, request, redirect, url_for, send_file, jsonify, session, send_from_directory
 from flask_socketio import SocketIO, emit
+from werkzeug.utils import secure_filename
+
+# Import theme manager
+try:
+    import theme_manager
+except ImportError:
+    theme_manager = None
+    print("Warning: theme_manager not found, theme features will be disabled")
 
 # Load environment variables
 try:
@@ -402,6 +410,75 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
             border-color: #68d391;
             box-shadow: 0 4px 12px rgba(56, 161, 105, 0.15);
         }
+        
+        /* Theme Card Styles */
+        .theme-card {
+            border: 2px solid #e2e8f0;
+            border-radius: 15px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: white;
+            position: relative;
+        }
+        .theme-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            border-color: #667eea;
+        }
+        .theme-card.active {
+            border-color: #38a169;
+            box-shadow: 0 0 0 3px rgba(56, 161, 105, 0.2);
+        }
+        .theme-card-image {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 48px;
+        }
+        .theme-card-body {
+            padding: 15px;
+        }
+        .theme-card-title {
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .theme-card-meta {
+            font-size: 0.85em;
+            color: #718096;
+            margin-bottom: 10px;
+        }
+        .theme-card-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .theme-card-actions button {
+            flex: 1;
+            padding: 8px;
+            font-size: 0.9em;
+        }
+        .theme-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #38a169;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        
         .status-bar {
             display: flex;
             gap: 15px;
@@ -868,6 +945,7 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
                 <h1 style="margin: 0;">🚀 OpenPiRouter Dashboard</h1>
                 <div style="display: flex; gap: 15px; align-items: center;">
                     <span style="color: #666; font-size: 14px; font-weight: 500;" id="uptime-display">⏱️ {{ system_status.uptime }}</span>
+                    <button onclick="openThemeModal()" style="background: none; border: none; font-size: 20px; cursor: pointer; padding: 8px; transition: transform 0.2s; color: #666;" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'"><i class="fas fa-palette"></i></button>
                     <button onclick="openSystemModal()" style="background: none; border: none; font-size: 20px; cursor: pointer; padding: 8px; transition: transform 0.2s; color: #666;" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'"><i class="fas fa-cog"></i></button>
                     <a href="/logout" style="background: none; border: none; font-size: 20px; cursor: pointer; text-decoration: none; padding: 8px; transition: transform 0.2s; color: #666;" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'"><i class="fas fa-sign-out-alt"></i></a>
                 </div>
@@ -1152,6 +1230,42 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
                     <i class="fas fa-power-off"></i>
                     <span>System Neustart</span>
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Theme Manager Modal -->
+    <div id="themeModal" class="system-modal">
+        <div class="system-modal-content" style="max-width: 900px;">
+            <div class="system-modal-header">
+                <h2><i class="fas fa-palette"></i> Theme Manager</h2>
+                <button class="system-modal-close" onclick="closeThemeModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="system-modal-body">
+                <!-- Theme Actions -->
+                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <button class="btn btn-success" onclick="exportCurrentTheme()">
+                        <i class="fas fa-download"></i> Aktuelles Theme Exportieren
+                    </button>
+                    <button class="btn btn-primary" onclick="document.getElementById('theme_upload').click()">
+                        <i class="fas fa-upload"></i> Theme Hochladen
+                    </button>
+                    <input type="file" id="theme_upload" accept=".zip" style="display: none;" onchange="uploadTheme(this)">
+                </div>
+                
+                <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+                
+                <h3 style="margin-bottom: 15px;">Verfügbare Themes</h3>
+                
+                <!-- Themes Grid -->
+                <div id="themesGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px;">
+                    <!-- Themes will be loaded here -->
+                    <div style="text-align: center; padding: 40px; color: #999; grid-column: 1/-1;">
+                        Lade Themes...
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -1992,11 +2106,202 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
             document.getElementById('systemModal').style.display = 'none';
         }
         
+        // Theme Manager Functions
+        function openThemeModal() {
+            document.getElementById('themeModal').style.display = 'flex';
+            loadThemes();
+        }
+        
+        function closeThemeModal() {
+            document.getElementById('themeModal').style.display = 'none';
+        }
+        
+        async function loadThemes() {
+            try {
+                const response = await fetch('/api/themes/list');
+                const themes = await response.json();
+                
+                const grid = document.getElementById('themesGrid');
+                if (themes.length === 0) {
+                    grid.innerHTML = `
+                        <div style="text-align: center; padding: 40px; color: #999; grid-column: 1/-1;">
+                            <i class="fas fa-palette" style="font-size: 48px; margin-bottom: 15px; opacity: 0.5;"></i>
+                            <p>Keine Themes gefunden. Lade dein erstes Theme hoch!</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                grid.innerHTML = themes.map(theme => `
+                    <div class="theme-card ${theme.is_active ? 'active' : ''}" onclick="activateTheme('${theme.name}')">
+                        ${theme.is_active ? '<div class="theme-badge">Aktiv</div>' : ''}
+                        <div class="theme-card-image">
+                            ${theme.has_screenshot ? 
+                                `<img src="/api/themes/screenshot/${theme.name}" style="width:100%;height:100%;object-fit:cover;">` : 
+                                `<i class="fas fa-palette"></i>`
+                            }
+                        </div>
+                        <div class="theme-card-body">
+                            <div class="theme-card-title">
+                                ${theme.display_name}
+                                ${theme.name === 'default' ? '<i class="fas fa-star" style="color:#f59e0b;"></i>' : ''}
+                            </div>
+                            <div class="theme-card-meta">
+                                ${theme.description}<br>
+                                <small>Version ${theme.version} • ${theme.author}</small>
+                            </div>
+                            ${theme.name !== 'default' ? `
+                            <div class="theme-card-actions" onclick="event.stopPropagation();">
+                                <button class="btn btn-danger btn-sm" onclick="deleteTheme('${theme.name}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading themes:', error);
+                showToast('Fehler beim Laden der Themes', 'error');
+            }
+        }
+        
+        async function activateTheme(themeName) {
+            try {
+                const result = await Swal.fire({
+                    title: 'Theme aktivieren?',
+                    text: `Möchtest du das Theme "${themeName}" aktivieren? Das Dashboard wird neu geladen.`,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Ja, aktivieren',
+                    cancelButtonText: 'Abbrechen'
+                });
+                
+                if (result.isConfirmed) {
+                    const response = await fetch('/api/themes/activate', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({theme_name: themeName})
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        showToast('Theme aktiviert! Lade neu...', 'success');
+                        setTimeout(() => location.reload(), 1500);
+                    } else {
+                        showToast(data.error || 'Fehler beim Aktivieren', 'error');
+                    }
+                }
+            } catch (error) {
+                console.error('Error activating theme:', error);
+                showToast('Fehler beim Aktivieren des Themes', 'error');
+            }
+        }
+        
+        async function exportCurrentTheme() {
+            try {
+                showToast('Exportiere Theme...', 'info');
+                
+                const response = await fetch('/api/themes/export');
+                if (!response.ok) throw new Error('Export failed');
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `openpirouter_theme_${new Date().toISOString().split('T')[0]}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                showToast('Theme erfolgreich exportiert!', 'success');
+            } catch (error) {
+                console.error('Error exporting theme:', error);
+                showToast('Fehler beim Exportieren des Themes', 'error');
+            }
+        }
+        
+        async function uploadTheme(input) {
+            if (!input.files || !input.files[0]) return;
+            
+            const file = input.files[0];
+            if (!file.name.endsWith('.zip')) {
+                showToast('Bitte wähle eine ZIP-Datei aus', 'error');
+                return;
+            }
+            
+            try {
+                showToast('Lade Theme hoch...', 'info');
+                
+                const formData = new FormData();
+                formData.append('theme', file);
+                
+                const response = await fetch('/api/themes/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('Theme erfolgreich hochgeladen!', 'success');
+                    loadThemes();
+                } else {
+                    showToast(data.error || 'Fehler beim Hochladen', 'error');
+                }
+            } catch (error) {
+                console.error('Error uploading theme:', error);
+                showToast('Fehler beim Hochladen des Themes', 'error');
+            } finally {
+                input.value = '';
+            }
+        }
+        
+        async function deleteTheme(themeName) {
+            try {
+                const result = await Swal.fire({
+                    title: 'Theme löschen?',
+                    text: `Möchtest du das Theme "${themeName}" wirklich löschen? Dies kann nicht rückgängig gemacht werden.`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#e53e3e',
+                    confirmButtonText: 'Ja, löschen',
+                    cancelButtonText: 'Abbrechen'
+                });
+                
+                if (result.isConfirmed) {
+                    const response = await fetch('/api/themes/delete', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({theme_name: themeName})
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        showToast('Theme gelöscht', 'success');
+                        loadThemes();
+                    } else {
+                        showToast(data.error || 'Fehler beim Löschen', 'error');
+                    }
+                }
+            } catch (error) {
+                console.error('Error deleting theme:', error);
+                showToast('Fehler beim Löschen des Themes', 'error');
+            }
+        }
+        
         // Close modal when clicking outside
         window.onclick = function(event) {
             const systemModal = document.getElementById('systemModal');
+            const themeModal = document.getElementById('themeModal');
             if (event.target == systemModal) {
                 closeSystemModal();
+            }
+            if (event.target == themeModal) {
+                closeThemeModal();
             }
         }
         
@@ -3482,7 +3787,153 @@ def api_import_config():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+# Theme Manager API Routes
+@app.route('/api/themes/list')
+def api_themes_list():
+    """API: List all available themes"""
+    try:
+        if not theme_manager:
+            return jsonify([])
+        
+        themes = theme_manager.list_themes()
+        return jsonify(themes)
+    except Exception as e:
+        print(f"Error listing themes: {e}")
+        return jsonify([])
+
+@app.route('/api/themes/activate', methods=['POST'])
+def api_themes_activate():
+    """API: Activate a theme"""
+    try:
+        if not theme_manager:
+            return jsonify({'success': False, 'error': 'Theme manager not available'})
+        
+        data = request.get_json()
+        theme_name = data.get('theme_name')
+        
+        if not theme_name:
+            return jsonify({'success': False, 'error': 'Theme name required'})
+        
+        theme_manager.activate_theme(theme_name)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/themes/export')
+def api_themes_export():
+    """API: Export current theme"""
+    try:
+        if not theme_manager:
+            return jsonify({'success': False, 'error': 'Theme manager not available'}), 400
+        
+        # Get current dashboard HTML
+        current_template = DASHBOARD_TEMPLATE
+        
+        # Get active theme name
+        active_theme = theme_manager.get_active_theme()
+        
+        # Export theme
+        zip_data = theme_manager.export_theme(active_theme, current_template)
+        
+        # Send as download
+        return send_file(
+            io.BytesIO(zip_data),
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=f'openpirouter_{active_theme}_{datetime.now().strftime("%Y%m%d")}.zip'
+        )
+    except Exception as e:
+        print(f"Error exporting theme: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/themes/upload', methods=['POST'])
+def api_themes_upload():
+    """API: Upload a new theme"""
+    try:
+        if not theme_manager:
+            return jsonify({'success': False, 'error': 'Theme manager not available'})
+        
+        if 'theme' not in request.files:
+            return jsonify({'success': False, 'error': 'No file uploaded'})
+        
+        file = request.files['theme']
+        
+        if file.filename == '':
+            return jsonify({'success': False, 'error': 'No file selected'})
+        
+        if not file.filename.endswith('.zip'):
+            return jsonify({'success': False, 'error': 'File must be a ZIP archive'})
+        
+        # Read file data
+        zip_data = file.read()
+        
+        # Upload theme
+        theme_name = theme_manager.upload_theme(zip_data)
+        
+        return jsonify({'success': True, 'theme_name': theme_name})
+    except Exception as e:
+        print(f"Error uploading theme: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/themes/delete', methods=['POST'])
+def api_themes_delete():
+    """API: Delete a theme"""
+    try:
+        if not theme_manager:
+            return jsonify({'success': False, 'error': 'Theme manager not available'})
+        
+        data = request.get_json()
+        theme_name = data.get('theme_name')
+        
+        if not theme_name:
+            return jsonify({'success': False, 'error': 'Theme name required'})
+        
+        theme_manager.delete_theme(theme_name)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/themes/screenshot/<theme_name>')
+def api_themes_screenshot(theme_name):
+    """API: Get theme screenshot"""
+    try:
+        if not theme_manager:
+            return '', 404
+        
+        screenshot_path = os.path.join('/opt/pi-config/themes', theme_name, 'screenshot.png')
+        
+        if os.path.exists(screenshot_path):
+            return send_file(screenshot_path, mimetype='image/png')
+        else:
+            return '', 404
+    except Exception as e:
+        print(f"Error serving screenshot: {e}")
+        return '', 404
+
 if __name__ == "__main__":
+    # Initialize theme system
+    if theme_manager:
+        try:
+            theme_manager.ensure_themes_dir()
+            # Save current template as default theme
+            default_template_path = '/opt/pi-config/themes/default/template.html'
+            os.makedirs(os.path.dirname(default_template_path), exist_ok=True)
+            with open(default_template_path, 'w', encoding='utf-8') as f:
+                f.write(DASHBOARD_TEMPLATE)
+            # Create default meta.json
+            default_meta = {
+                'name': 'default',
+                'display_name': 'OpenPiRouter Default',
+                'description': 'Standard OpenPiRouter Dashboard Theme',
+                'author': 'OpenPiRouter',
+                'version': '1.0'
+            }
+            with open('/opt/pi-config/themes/default/meta.json', 'w') as f:
+                json.dump(default_meta, f, indent=2)
+            print("Theme system initialized")
+        except Exception as e:
+            print(f"Warning: Could not initialize theme system: {e}")
+    
     # Start background update thread
     update_thread = threading.Thread(target=background_update_task, daemon=True)
     update_thread.start()
