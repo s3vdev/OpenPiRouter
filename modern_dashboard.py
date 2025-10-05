@@ -931,7 +931,7 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
 
             <!-- Internet Connection -->
             <div class="card">
-                <h2><span class="icon">🌐</span>Internet Verbindung</h2>
+                <h2><span class="icon">🌐</span>Internet Verbindung (wlan0)</h2>
                 
                 <!-- Current Connection -->
                 <div id="current-wifi-section" style="display: none;">
