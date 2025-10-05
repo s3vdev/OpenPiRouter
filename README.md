@@ -59,6 +59,14 @@ OpenPiRouter is a complete router solution that turns your Raspberry Pi into a f
 - **Modal Dialogs**: Clean, modern interface elements
 - **FontAwesome Icons**: Professional icon library
 
+### 🎨 Theme System
+- **Custom Themes**: Upload your own dashboard designs
+- **Theme Manager**: Easy theme switching with preview images
+- **Export/Import**: Download current theme as template
+- **One-Click Activation**: Switch themes instantly
+- **Example Themes**: Pre-built themes to get started
+- **Full Customization**: Complete control over HTML/CSS/JS
+
 ---
 
 ## 📋 Requirements
@@ -179,6 +187,39 @@ All settings can be modified through the web dashboard:
 # Via Dashboard: System Menu → Konfiguration Importieren
 # Upload your pi-router-config.yaml
 ```
+
+### Theme Management
+
+**Create Custom Themes:**
+
+```bash
+# 1. Export current theme via Dashboard
+# Theme Manager (🎨) → "Aktuelles Theme Exportieren"
+
+# 2. Extract and customize
+unzip openpirouter_theme_*.zip
+cd openpirouter_theme_*/
+
+# Edit template.html with your changes
+nano template.html
+
+# Add a screenshot
+cp your_screenshot.png screenshot.png
+
+# Update metadata
+nano meta.json
+
+# 3. Re-zip and upload
+cd ..
+zip -r my_custom_theme.zip openpirouter_theme_*/
+
+# 4. Upload via Theme Manager
+# Theme Manager → "Theme Hochladen" → Select ZIP
+```
+
+**Example themes** available in `example_themes/` directory.
+
+See [example_themes/README.md](example_themes/README.md) for detailed theme development guide.
 
 ### Manual Service Control
 
