@@ -262,6 +262,16 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
             background: #c53030;
         }
         
+        /* Toast container - always on top */
+        .swal-toast-container {
+            z-index: 9999999 !important;
+        }
+        
+        /* SweetAlert modal - above theme modal */
+        .swal-top-modal {
+            z-index: 10000000 !important;
+        }
+        
         /* System Menu Modal */
         .system-modal {
             display: none;
@@ -2171,34 +2181,47 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
         
         async function activateTheme(themeName) {
             try {
+                // Hide theme modal temporarily
+                const themeModal = document.getElementById('themeModal');
+                themeModal.style.display = 'none';
+                
                 const result = await Swal.fire({
                     title: 'Theme aktivieren?',
                     text: `Möchtest du das Theme "${themeName}" aktivieren? Das Dashboard wird neu geladen.`,
                     icon: 'question',
                     showCancelButton: true,
                     confirmButtonText: 'Ja, aktivieren',
-                    cancelButtonText: 'Abbrechen'
+                    cancelButtonText: 'Abbrechen',
+                    customClass: {
+                        container: 'swal-top-modal'
+                    }
                 });
                 
-                if (result.isConfirmed) {
-                    const response = await fetch('/api/themes/activate', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({theme_name: themeName})
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        showToast('Theme aktiviert! Lade neu...', 'success');
-                        setTimeout(() => location.reload(), 1500);
-                    } else {
-                        showToast(data.error || 'Fehler beim Aktivieren', 'error');
-                    }
+                // Show theme modal again if user cancels
+                if (!result.isConfirmed) {
+                    themeModal.style.display = 'block';
+                    return;
+                }
+                
+                const response = await fetch('/api/themes/activate', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({theme_name: themeName})
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('Theme aktiviert! Lade neu...', 'success');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showToast(data.error || 'Fehler beim Aktivieren', 'error');
+                    themeModal.style.display = 'block';
                 }
             } catch (error) {
                 console.error('Error activating theme:', error);
                 showToast('Fehler beim Aktivieren des Themes', 'error');
+                document.getElementById('themeModal').style.display = 'block';
             }
         }
         
@@ -2376,7 +2399,10 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
                 timerProgressBar: true,
                 background: color,
                 color: 'white',
-                iconColor: 'white'
+                iconColor: 'white',
+                customClass: {
+                    container: 'swal-toast-container'
+                }
             });
         }
 
@@ -3019,7 +3045,21 @@ def dashboard():
     band = config.get('ap_band', ap_info.get('band', '5G'))
     available_channels = ["1", "6", "11"] if band == "2G" else ["36", "40", "44", "48"]
     
-    return render_template_string(DASHBOARD_TEMPLATE,
+    # Load active theme template
+    template_content = DASHBOARD_TEMPLATE
+    if theme_manager:
+        active_theme = theme_manager.get_active_theme()
+        if active_theme and active_theme != 'default':
+            theme_template = theme_manager.get_theme_template(active_theme)
+            if theme_template:
+                template_content = theme_template
+                print(f"Loading active theme: {active_theme}")
+            else:
+                print(f"Failed to load theme {active_theme}, using default")
+        else:
+            print("Using default theme")
+    
+    return render_template_string(template_content,
         system_status=system_status,
         system_stats=system_stats,
         wan=wan_info,
