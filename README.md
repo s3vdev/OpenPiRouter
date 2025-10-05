@@ -83,7 +83,7 @@ OpenPiRouter is a complete router solution that turns your Raspberry Pi into a f
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/OpenPiRouter.git
+git clone https://github.com/s3vdev/OpenPiRouter.git
 cd OpenPiRouter
 ```
 
@@ -325,8 +325,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/OpenPiRouter/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/OpenPiRouter/discussions)
+- **Issues**: [GitHub Issues](https://github.com/s3vdev/OpenPiRouter/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/s3vdev/OpenPiRouter/discussions)
 
 ---
 
