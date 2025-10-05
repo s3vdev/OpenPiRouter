@@ -369,7 +369,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -f "${SCRIPT_DIR}/modern_dashboard.py" ]]; then
     log "Kopiere modernes Dashboard..."
     cp "${SCRIPT_DIR}/modern_dashboard.py" /opt/pi-config/web.py
-    chmod +x /opt/pi-config/web.py
+chmod +x /opt/pi-config/web.py
 else
     log "FEHLER: modern_dashboard.py nicht gefunden!"
     log "Bitte stelle sicher, dass modern_dashboard.py im gleichen Verzeichnis liegt."

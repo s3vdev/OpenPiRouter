@@ -11,7 +11,7 @@ from werkzeug.utils import secure_filename
 
 # Import theme manager
 try:
-    import theme_manager
+    import theme_manager_v2 as theme_manager
 except ImportError:
     theme_manager = None
     print("Warning: theme_manager not found, theme features will be disabled")
@@ -216,8 +216,9 @@ HOSTAPD = "/etc/hostapd/hostapd.conf"
 LEASES = "/var/lib/misc/dnsmasq.leases"
 
 # Modern Dashboard Template
-DASHBOARD_TEMPLATE = """<!DOCTYPE html>
-<html lang="de">
+# Theme Base HTML - Only structure and CSS, NO JavaScript
+# This is what gets stored in theme templates
+THEME_BASE_HTML = """<html lang="de">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -964,10 +965,10 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
                 </div>
             </div>
             <div class="status-bar">
-                <div class="status-item {{ 'status-online' if system_status.wifi else 'status-offline' }}">
+                <div class="status-item {{ 'status-online' if system_status.wifi else 'status-offline' }}" id="wifi-status">
                     📶 WLAN (wlan0): {{ 'Online' if system_status.wifi else 'Offline' }}
                 </div>
-                <div class="status-item {{ 'status-online' if system_status.internet else 'status-offline' }}">
+                <div class="status-item {{ 'status-online' if system_status.internet else 'status-offline' }}" id="internet-status">
                     🌐 Internet: {{ 'Verbunden' if system_status.internet else 'Getrennt' }}
                 </div>
                 <div class="status-item status-online" id="public-ip-status" style="cursor: pointer;" onclick="copyPublicIP()" title="Klicken zum Kopieren">
@@ -976,10 +977,10 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
                 <div class="status-item status-online" id="speed-status" style="min-width: 195px;">
                     📊 <span id="download-speed">0.0</span> ↓ <span id="upload-speed">0.0</span> ↑ Mbit/s
                 </div>
-                <div class="status-item {{ 'status-online' if system_status.ap else 'status-offline' }}">
+                <div class="status-item {{ 'status-online' if system_status.ap else 'status-offline' }}" id="ap-status">
                     📡 AP (wlan1): {{ 'Online' if system_status.ap else 'Offline' }}
                 </div>
-                <div class="status-item {{ 'status-online' if system_status.pihole else 'status-offline' }}">
+                <div class="status-item {{ 'status-online' if system_status.pihole else 'status-offline' }}" id="pihole-status">
                     🛡️ Pi-hole: {{ 'Online' if system_status.pihole else 'Offline' }}
                 </div>
                 <div class="status-item status-warning" id="websocket-status">
@@ -1074,7 +1075,7 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
                 </div>
                 <div class="form-group">
                     <label>Band:</label>
-                    <select id="ap_band">
+                    <select id="ap_band" onchange="updateChannelOptions()">
                         <option value="2G" {{ 'selected' if ap.band == '2G' else '' }}>2.4 GHz</option>
                         <option value="5G" {{ 'selected' if ap.band == '5G' else '' }}>5 GHz</option>
                     </select>
@@ -1291,6 +1292,14 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
+    <!-- SYSTEM_JAVASCRIPT_PLACEHOLDER -->
+</body>
+</html>"""
+
+
+# System JavaScript - Central logic, always loaded
+# This is injected into every theme automatically
+SYSTEM_JAVASCRIPT = """
     <script>
         // Speed monitoring variables
         let lastSpeedData = null;
@@ -1386,11 +1395,11 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
         }
         
         function updateSystemStatus(status) {
-            // Update status indicators
-            const wifiStatus = document.querySelector('.status-item:nth-child(1)');
-            const internetStatus = document.querySelector('.status-item:nth-child(2)');
-            const apStatus = document.querySelector('.status-item:nth-child(4)');
-            const piholeStatus = document.querySelector('.status-item:nth-child(5)');
+            // Update status indicators using IDs instead of nth-child
+            const wifiStatus = document.getElementById('wifi-status');
+            const internetStatus = document.getElementById('internet-status');
+            const apStatus = document.getElementById('ap-status');
+            const piholeStatus = document.getElementById('pihole-status');
             
             if (wifiStatus) {
                 wifiStatus.textContent = `📶 WLAN (wlan0): ${status.wifi ? 'Online' : 'Offline'}`;
@@ -1838,9 +1847,24 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
         }
 
         function showQRCode() {
-            const ssid = document.getElementById('ap_ssid').value;
-            const password = document.getElementById('ap_pass').value;
-            const isHidden = !document.getElementById('ap_visibility_toggle').checked;
+            // Get current AP settings with REAL password from the server
+            fetch('/api/get_ap_qr_info')
+                .then(response => response.json())
+                .then(data => {
+                    const ssid = data.ssid || document.getElementById('ap_ssid').value;
+                    const password = data.password || document.getElementById('ap_pass').value;
+                    // Fix: ssid_visible is true when visible, so hidden = !ssid_visible
+                    const isHidden = data.ssid_visible === false;
+                    console.log('QR Code Info:', {ssid, password: '***', isHidden, ssid_visible: data.ssid_visible});
+                    generateQRCode(ssid, password, isHidden);
+                })
+                .catch(error => {
+                    console.error('Error fetching AP info:', error);
+                    showToast('Fehler beim Laden der AP-Daten', 'error');
+                });
+        }
+        
+        function generateQRCode(ssid, password, isHidden) {
             
             if (!ssid || !password) {
                 showToast('SSID und Passwort müssen ausgefüllt sein!', 'error');
@@ -1848,9 +1872,11 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
             }
             
             // Generate WIFI QR code string with correct hidden flag
-            // Note: H must be 'true' or 'false' as string, not boolean
-            const hiddenFlag = isHidden ? 'true' : 'false';
-            const wifiString = `WIFI:T:WPA;S:${ssid};P:${password};H:${hiddenFlag};;`;
+            // Note: For hidden networks, H:true is required. For visible networks, omit H or use H:false
+            // But many devices expect H to be omitted for visible networks
+            const wifiString = isHidden 
+                ? `WIFI:T:WPA;S:${ssid};P:${password};H:true;;`
+                : `WIFI:T:WPA;S:${ssid};P:${password};;`;
             console.log('QR-Code WiFi String:', wifiString, 'isHidden:', isHidden);
             
             // Show loading message
@@ -1933,6 +1959,27 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
             currentBand,
             savedVisibleBand
         });
+        
+        function updateChannelOptions() {
+            const band = document.getElementById('ap_band').value;
+            const channelSelect = document.getElementById('ap_channel');
+            
+            // Clear existing options
+            channelSelect.innerHTML = '';
+            
+            // Add appropriate channels based on band
+            const channels = band === '2G' ? ['1', '6', '11'] : ['36', '40', '44', '48', '149', '153', '157', '161'];
+            
+            channels.forEach(ch => {
+                const option = document.createElement('option');
+                option.value = ch;
+                option.textContent = ch;
+                channelSelect.appendChild(option);
+            });
+            
+            // Select first channel by default
+            channelSelect.value = channels[0];
+        }
         
         function toggleAPVisibility() {
             const visible = document.getElementById('ap_visibility_toggle').checked;
@@ -2554,8 +2601,14 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
                 .catch(error => console.error('Error loading speed data:', error));
         }
     </script>
-</body>
-</html>"""
+"""
+
+# Combined template for backward compatibility
+DASHBOARD_TEMPLATE = THEME_BASE_HTML.replace(
+    "    <!-- SYSTEM_JAVASCRIPT_PLACEHOLDER -->",
+    SYSTEM_JAVASCRIPT
+)
+
 
 def sh(cmd, timeout=10):
     """Execute shell command with timeout"""
@@ -3076,19 +3129,22 @@ def dashboard():
     band = config.get('ap_band', ap_info.get('band', '5G'))
     available_channels = ["1", "6", "11"] if band == "2G" else ["36", "40", "44", "48"]
     
-    # Load active theme template
+    # Load active theme template with JavaScript injection
     template_content = DASHBOARD_TEMPLATE
     if theme_manager:
         active_theme = theme_manager.get_active_theme()
-        if active_theme and active_theme != 'default':
-            theme_template = theme_manager.get_theme_template(active_theme)
+        if active_theme:
+            # Get theme HTML and inject system JavaScript
+            theme_template = theme_manager.get_theme_template(active_theme, SYSTEM_JAVASCRIPT)
             if theme_template:
                 template_content = theme_template
-                print(f"Loading active theme: {active_theme}")
+                print(f"Loading active theme: {active_theme} (with injected JavaScript)")
             else:
                 print(f"Failed to load theme {active_theme}, using default")
         else:
             print("Using default theme")
+    else:
+        print("Theme manager not available, using default template")
     
     return render_template_string(template_content,
         system_status=system_status,
@@ -3344,6 +3400,26 @@ def api_get_ap_info():
     """API: Get Access Point information"""
     try:
         info = get_ap_info()
+        return jsonify(info)
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+@app.route('/api/get_ap_qr_info')
+def api_get_ap_qr_info():
+    """API: Get Access Point information with real password for QR code generation"""
+    try:
+        info = get_ap_info()
+        # Get real password from hostapd config
+        try:
+            if os.path.exists(HOSTAPD):
+                with open(HOSTAPD, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith('wpa_passphrase='):
+                            info['password'] = line.split('=', 1)[1].strip('"')
+                            break
+        except:
+            pass
         return jsonify(info)
     except Exception as e:
         return jsonify({'error': str(e)})
@@ -3961,7 +4037,7 @@ def api_themes_export():
             return jsonify({'success': False, 'error': 'Theme manager not available'}), 400
         
         # Get current dashboard HTML
-        current_template = DASHBOARD_TEMPLATE
+        current_template = THEME_BASE_HTML  # Export only HTML+CSS, no JavaScript
         
         # Get active theme name
         active_theme = theme_manager.get_active_theme()
@@ -4085,7 +4161,7 @@ if __name__ == "__main__":
             default_template_path = '/opt/pi-config/themes/default/template.html'
             os.makedirs(os.path.dirname(default_template_path), exist_ok=True)
             with open(default_template_path, 'w', encoding='utf-8') as f:
-                f.write(DASHBOARD_TEMPLATE)
+                f.write(THEME_BASE_HTML)
             # Create default meta.json
             default_meta = {
                 'name': 'default',

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-OpenPiRouter Theme Manager
+OpenPiRouter Theme Manager V2
 Handles theme uploads, exports, activation and management
+NEW: Themes contain only HTML+CSS, JavaScript is injected from system
 """
 import os
 import json
@@ -101,19 +102,22 @@ def activate_theme(theme_name):
     
     return True
 
-def export_theme(theme_name, current_template_html):
-    """Export a theme as a ZIP file"""
+def export_theme(theme_name, theme_html_only):
+    """
+    Export a theme as a ZIP file
+    NEW: Only exports the HTML+CSS part (no JavaScript)
+    """
     ensure_themes_dir()
     
     theme_path = os.path.join(THEMES_DIR, theme_name)
     
     # Create temporary directory for export
     with tempfile.TemporaryDirectory() as temp_dir:
-        export_path = os.path.join(temp_dir, f'{theme_name}.zip')
+        export_path = os.path.join(temp_dir, f'openpirouter_{theme_name}_theme.zip')
         
         with zipfile.ZipFile(export_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            # Add template.html (current dashboard HTML)
-            zipf.writestr('template.html', current_template_html)
+            # Add template.html (only HTML+CSS, no JavaScript)
+            zipf.writestr('template.html', theme_html_only)
             
             # Add metadata
             meta = {
@@ -121,8 +125,9 @@ def export_theme(theme_name, current_template_html):
                 'display_name': theme_name.replace('_', ' ').title(),
                 'description': f'Exported theme from OpenPiRouter',
                 'author': 'OpenPiRouter',
-                'version': '1.0',
-                'exported': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                'version': '2.0',  # V2: Themes without JavaScript
+                'exported': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'system_version': '2.0'  # Indicates V2 theme system
             }
             zipf.writestr('meta.json', json.dumps(meta, indent=2))
             
@@ -133,20 +138,33 @@ def export_theme(theme_name, current_template_html):
                     zipf.write(screenshot, 'screenshot.png')
             
             # Add README
-            readme = """# OpenPiRouter Theme
+            readme = """# OpenPiRouter Theme V2
+
+## What's New in V2?
+- Themes now contain ONLY HTML structure and CSS styling
+- JavaScript logic is automatically provided by the system
+- No need to update JavaScript when system features change
+- Simply customize colors, layouts, and styling!
 
 ## Installation
 1. Upload this ZIP file via the Theme Manager in OpenPiRouter Dashboard
 2. Click on the theme preview to activate it
 
 ## Structure
-- template.html: Main dashboard template
+- template.html: Dashboard HTML structure + CSS (NO JavaScript)
 - screenshot.png: Theme preview image
 - meta.json: Theme metadata
 
 ## Customization
-Edit template.html to customize the dashboard appearance.
-All HTML, CSS, and JavaScript can be modified.
+Edit template.html to customize:
+- CSS styles (colors, fonts, spacing)
+- HTML structure (layout, card arrangement)
+- Do NOT add <script> tags - JavaScript is provided by the system!
+
+## Important Notes
+- Keep all element IDs unchanged (e.g., id="wifi-status", id="ap-status")
+- Keep all class names for functionality (e.g., class="btn", class="card")
+- The placeholder <!-- SYSTEM_JAVASCRIPT_PLACEHOLDER --> will be replaced with system logic
 """
             zipf.writestr('README.md', readme)
         
@@ -155,7 +173,10 @@ All HTML, CSS, and JavaScript can be modified.
             return f.read()
 
 def upload_theme(zip_file_bytes, theme_name=None):
-    """Upload and install a new theme from ZIP file"""
+    """
+    Upload and install a new theme from ZIP file
+    NEW: Validates that theme doesn't contain <script> tags (only HTML+CSS)
+    """
     ensure_themes_dir()
     
     # Create temporary directory for extraction
@@ -175,6 +196,15 @@ def upload_theme(zip_file_bytes, theme_name=None):
         template_file = os.path.join(extract_dir, 'template.html')
         if not os.path.exists(template_file):
             raise ValueError("Theme must contain template.html")
+        
+        # Read and validate template
+        with open(template_file, 'r', encoding='utf-8') as f:
+            template_content = f.read()
+        
+        # Check for JavaScript (should not be present in V2 themes)
+        if '<script>' in template_content.lower():
+            # This might be an old V1 theme, warn but allow it
+            print(f"WARNING: Theme contains <script> tags. V2 themes should only have HTML+CSS.")
         
         # Read metadata
         meta_file = os.path.join(extract_dir, 'meta.json')
@@ -219,17 +249,46 @@ def delete_theme(theme_name):
     shutil.rmtree(theme_path)
     return True
 
-def get_theme_template(theme_name=None):
-    """Get the HTML template for a specific theme"""
+def get_theme_template(theme_name=None, system_javascript=None):
+    """
+    Get the complete HTML template for a specific theme
+    NEW: Automatically injects system JavaScript into theme HTML
+    
+    Args:
+        theme_name: Name of theme to load (defaults to active theme)
+        system_javascript: JavaScript code to inject (required for V2 themes)
+    
+    Returns:
+        Complete HTML with JavaScript injected
+    """
     if not theme_name:
         theme_name = get_active_theme()
     
     theme_path = os.path.join(THEMES_DIR, theme_name)
     template_file = os.path.join(theme_path, 'template.html')
     
-    if os.path.exists(template_file):
-        with open(template_file, 'r', encoding='utf-8') as f:
-            return f.read()
+    if not os.path.exists(template_file):
+        return None
     
-    return None
+    with open(template_file, 'r', encoding='utf-8') as f:
+        theme_html = f.read()
+    
+    # If system JavaScript is provided, inject it
+    if system_javascript:
+        # Check if theme has placeholder
+        if '<!-- SYSTEM_JAVASCRIPT_PLACEHOLDER -->' in theme_html:
+            # V2 theme with placeholder
+            theme_html = theme_html.replace(
+                '<!-- SYSTEM_JAVASCRIPT_PLACEHOLDER -->',
+                system_javascript
+            )
+        elif '<script>' not in theme_html:
+            # V2 theme without placeholder, add JS before </body>
+            theme_html = theme_html.replace(
+                '</body>',
+                f'{system_javascript}\n</body>'
+            )
+        # else: V1 theme with embedded JS, use as-is
+    
+    return theme_html
 
