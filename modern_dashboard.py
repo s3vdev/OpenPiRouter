@@ -3702,13 +3702,16 @@ def api_update_eth0_mode():
             except:
                 pass
             
-            # Clean up eth0 AP mode rules
+            # Clean up eth0 AP mode rules (both old eth0/wlan1 and br0 rules)
             for i in range(5):
                 try:
                     sh("iptables -t nat -D POSTROUTING -s 192.168.50.0/24 -o wlan0 -j MASQUERADE")
                     sh("iptables -D FORWARD -i eth0 -s 192.168.50.0/24 -o wlan0 -j ACCEPT")
                     sh("iptables -D FORWARD -i wlan0 -o eth0 -d 192.168.50.0/24 -j ACCEPT")
                     sh("iptables -D FORWARD -i eth0 -o wlan1 -s 192.168.50.0/24 -d 192.168.50.0/24 -j ACCEPT")
+                    sh("iptables -D FORWARD -i br0 -s 192.168.50.0/24 -o wlan0 -j ACCEPT")
+                    sh("iptables -D FORWARD -i wlan0 -o br0 -d 192.168.50.0/24 -j ACCEPT")
+                    sh("iptables -D FORWARD -i br0 -o br0 -s 192.168.50.0/24 -d 192.168.50.0/24 -j ACCEPT")
                 except:
                     break
             
@@ -3752,42 +3755,43 @@ expand-hosts
                 pass
             sh("ip link set wlan1 up")
             
-            # Create bridge br0 with wlan1 and eth0
-            # This allows both interfaces to share the same 192.168.50.0/24 network
+            # Keep wlan1 as separate interface with its own IP
+            # Only add eth0 to bridge for LAN clients
             try:
                 # Remove any existing bridge first
                 sh("ip link set br0 down 2>/dev/null || true")
                 sh("ip link delete br0 2>/dev/null || true")
                 
-                # Create new bridge
+                # Ensure wlan1 has its IP and is up
+                sh("ip addr add 192.168.50.1/24 dev wlan1 2>/dev/null || true")
+                sh("ip link set wlan1 up")
+                
+                # Create bridge only for eth0 (LAN clients)
                 sh("ip link add name br0 type bridge")
                 sh("ip link set br0 up")
-                sh("ip addr add 192.168.50.1/24 dev br0")
-                
-                # Add wlan1 to bridge (remove its IP first)
-                sh("ip addr flush dev wlan1 2>/dev/null || true")
-                sh("ip link set wlan1 master br0")
-                sh("ip link set wlan1 up")
+                sh("ip addr add 192.168.50.2/24 dev br0")
                 
                 # Add eth0 to bridge (remove its IP first)
                 sh("ip addr flush dev eth0 2>/dev/null || true")
                 sh("ip link set eth0 master br0")
                 sh("ip link set eth0 up")
                 
-                print("🔧 Bridge br0 created successfully with wlan1 and eth0")
+                print("🔧 Bridge br0 created for eth0, wlan1 kept separate")
             except Exception as e:
                 print(f"❌ Bridge creation failed: {e}")
                 # Fallback: just use wlan1 without bridge
                 sh("ip addr add 192.168.50.1/24 dev wlan1 2>/dev/null || true")
                 sh("ip link set wlan1 up")
             
-            # Configure dnsmasq to listen on br0 instead of wlan1
+            # Configure dnsmasq to listen on both wlan1 and br0
             # This allows DHCP to work for both WiFi and Ethernet clients
-            dnsmasq_config = """interface=br0
+            dnsmasq_config = """interface=wlan1
+interface=br0
 bind-interfaces
-dhcp-range=192.168.50.50,192.168.50.150,12h
+dhcp-range=wlan1,192.168.50.10,192.168.50.50,12h
+dhcp-range=br0,192.168.50.51,192.168.50.150,12h
 dhcp-option=3,192.168.50.1
-dhcp-option=6,192.168.50.1
+dhcp-option=6,8.8.8.8,8.8.4.4
 port=0
 domain=lan
 expand-hosts
@@ -3800,15 +3804,15 @@ expand-hosts
             
             # Create a systemd service to maintain bridge on boot
             service_content = '''[Unit]
-Description=Configure eth0+wlan1 bridge for OpenPiRouter AP mode
+Description=Configure eth0 bridge for OpenPiRouter LAN AP mode
 After=network.target
 Before=hostapd.service dnsmasq.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/bin/bash -c 'ip link add name br0 type bridge || true; ip link set br0 up; ip addr add 192.168.50.1/24 dev br0 || true; ip addr flush dev wlan1; ip link set wlan1 master br0; ip link set wlan1 up; ip addr flush dev eth0; ip link set eth0 master br0; ip link set eth0 up; echo "interface=br0\\nbind-interfaces\\ndhcp-range=192.168.50.50,192.168.50.150,12h\\ndhcp-option=3,192.168.50.1\\ndhcp-option=6,192.168.50.1\\nport=0\\ndomain=lan\\nexpand-hosts" > /etc/dnsmasq.d/pi-repeater.conf; sed -i "s/^interface=.*/interface=wlan1/" /etc/hostapd/hostapd.conf; grep -q "^bridge=" /etc/hostapd/hostapd.conf || echo "bridge=br0" >> /etc/hostapd/hostapd.conf; sed -i "s/^bridge=.*/bridge=br0/" /etc/hostapd/hostapd.conf'
-ExecStop=/bin/bash -c 'ip link set wlan1 nomaster; ip link set eth0 nomaster; ip link set br0 down; ip link delete br0'
+ExecStart=/bin/bash -c 'ip link add name br0 type bridge || true; ip link set br0 up; ip addr add 192.168.50.2/24 dev br0 || true; ip addr add 192.168.50.1/24 dev wlan1 || true; ip link set wlan1 up; ip addr flush dev eth0; ip link set eth0 master br0; ip link set eth0 up; echo "interface=wlan1\\ninterface=br0\\nbind-interfaces\\ndhcp-range=wlan1,192.168.50.10,192.168.50.50,12h\\ndhcp-range=br0,192.168.50.51,192.168.50.150,12h\\ndhcp-option=3,192.168.50.1\\ndhcp-option=6,8.8.8.8,8.8.4.4\\nport=0\\ndomain=lan\\nexpand-hosts" > /etc/dnsmasq.d/pi-repeater.conf'
+ExecStop=/bin/bash -c 'ip link set eth0 nomaster; ip link set br0 down; ip link delete br0'
 
 [Install]
 WantedBy=multi-user.target
@@ -3829,22 +3833,35 @@ WantedBy=multi-user.target
             except:
                 pass
             
-            # Clean up any duplicate rules first
+            # Clean up any duplicate rules first (both old eth0/wlan1 and br0 rules)
             for i in range(5):  # Remove up to 5 duplicates
                 try:
                     sh("iptables -t nat -D POSTROUTING -s 192.168.50.0/24 -o wlan0 -j MASQUERADE")
                     sh("iptables -D FORWARD -i eth0 -s 192.168.50.0/24 -o wlan0 -j ACCEPT")
                     sh("iptables -D FORWARD -i wlan0 -o eth0 -d 192.168.50.0/24 -j ACCEPT")
+                    sh("iptables -D FORWARD -i wlan1 -s 192.168.50.0/24 -o wlan0 -j ACCEPT")
+                    sh("iptables -D FORWARD -i wlan0 -o wlan1 -d 192.168.50.0/24 -j ACCEPT")
+                    sh("iptables -D FORWARD -i br0 -s 192.168.50.0/24 -o wlan0 -j ACCEPT")
+                    sh("iptables -D FORWARD -i wlan0 -o br0 -d 192.168.50.0/24 -j ACCEPT")
+                    sh("iptables -D FORWARD -i wlan1 -o br0 -s 192.168.50.0/24 -d 192.168.50.0/24 -j ACCEPT")
+                    sh("iptables -D FORWARD -i br0 -o wlan1 -s 192.168.50.0/24 -d 192.168.50.0/24 -j ACCEPT")
                 except:
                     break
             
-            # Add eth0 as output interface (in addition to wlan1)
+            # Add rules for both wlan1 (WiFi) and br0 (LAN) clients
             sh("iptables -t nat -A POSTROUTING -s 192.168.50.0/24 -o wlan0 -j MASQUERADE")
-            sh("iptables -A FORWARD -i eth0 -s 192.168.50.0/24 -o wlan0 -j ACCEPT")
-            sh("iptables -A FORWARD -i wlan0 -o eth0 -d 192.168.50.0/24 -j ACCEPT")
             
-            # Also allow eth0 -> eth0 for local subnet communication
-            sh("iptables -A FORWARD -i eth0 -o wlan1 -s 192.168.50.0/24 -d 192.168.50.0/24 -j ACCEPT")
+            # WiFi clients (wlan1)
+            sh("iptables -A FORWARD -i wlan1 -s 192.168.50.0/24 -o wlan0 -j ACCEPT")
+            sh("iptables -A FORWARD -i wlan0 -o wlan1 -d 192.168.50.0/24 -j ACCEPT")
+            
+            # LAN clients (br0/eth0)
+            sh("iptables -A FORWARD -i br0 -s 192.168.50.0/24 -o wlan0 -j ACCEPT")
+            sh("iptables -A FORWARD -i wlan0 -o br0 -d 192.168.50.0/24 -j ACCEPT")
+            
+            # Allow cross-communication between WiFi and LAN
+            sh("iptables -A FORWARD -i wlan1 -o br0 -s 192.168.50.0/24 -d 192.168.50.0/24 -j ACCEPT")
+            sh("iptables -A FORWARD -i br0 -o wlan1 -s 192.168.50.0/24 -d 192.168.50.0/24 -j ACCEPT")
             
             # Save iptables rules
             sh("netfilter-persistent save")
