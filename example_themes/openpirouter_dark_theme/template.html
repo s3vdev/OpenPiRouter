@@ -36,21 +36,32 @@
         }
         
         .logout-btn {
-            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            background: #e53e3e;
             color: white;
             padding: 8px 16px;
-            border-radius: 10px;
+            border-radius: 8px;
             text-decoration: none;
             font-size: 0.9em;
-            transition: all 0.3s;
+            transition: background 0.2s;
             border: none;
             cursor: pointer;
-            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
         }
         
         .logout-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+            background: #c53030;
+        }
+        
+        /* Toast container - always on top */
+        .swal-toast-container {
+            z-index: 9999999 !important;
+        }
+        
+        /* SweetAlert modal - above theme modal */
+        .swal-top-modal {
+            z-index: 99999999 !important;
+        }
+        .swal2-container {
+            z-index: 99999999 !important;
         }
         
         /* System Menu Modal */
@@ -67,16 +78,14 @@
         }
         
         .system-modal-content {
-            background: rgba(30, 41, 59, 0.95);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(148, 163, 184, 0.2);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             margin: 5% auto;
             padding: 0;
-            border-radius: 25px;
+            border-radius: 20px;
             width: 90%;
             max-width: 600px;
             max-height: 85vh;
-            box-shadow: 0 25px 70px rgba(0,0,0,0.5);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
             animation: slideDown 0.3s ease-out;
             overflow: hidden;
             display: flex;
@@ -85,9 +94,8 @@
         
         .system-modal-header {
             padding: 30px;
-            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%);
-            color: #f1f5f9;
-            border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+            color: white;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
             flex-shrink: 0;
             display: flex;
             justify-content: space-between;
@@ -175,10 +183,12 @@
             color: #667eea;
         }
         
-        .system-action-btn.btn-danger {
-            background: #fff5f5;
-            border-color: #feb2b2;
-            color: #c53030;
+        .system-action-btn        .btn-danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+        }
+        .btn-danger:hover {
+            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.5);
         }
         
         .system-action-btn.btn-danger i {
@@ -191,9 +201,12 @@
             box-shadow: 0 4px 12px rgba(229, 62, 62, 0.15);
         }
         
-        .system-action-btn.btn-success {
-            background: #f0fff4;
-            border-color: #9ae6b4;
+        .system-action-btn        .btn-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+        }
+        .btn-success:hover {
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
         }
         
         .system-action-btn.btn-success i {
@@ -275,12 +288,12 @@
         
         .status-bar {
             display: flex;
-            gap: 12px;
+            gap: 15px;
             flex-wrap: wrap;
             justify-content: center;
             margin-top: 10px;
         }
-        .status-item {
+                .status-item {
             background: rgba(51, 65, 85, 0.8);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(148, 163, 184, 0.2);
@@ -295,9 +308,9 @@
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(99, 102, 241, 0.3);
         }
-        .status-online { color: #10b981; }
-        .status-offline { color: #ef4444; }
-        .status-warning { color: #f59e0b; }
+                .status-online { color: #10b981; }
+                .status-offline { color: #ef4444; }
+                .status-warning { color: #f59e0b; }
         
         .grid { 
             display: grid; 
@@ -313,7 +326,7 @@
                 grid-column: span 1;
             }
         }
-        .card { 
+                .card { 
             background: rgba(30, 41, 59, 0.8);
             backdrop-filter: blur(20px);
             border: 1px solid rgba(148, 163, 184, 0.1);
@@ -322,12 +335,12 @@
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
             transition: all 0.3s ease;
         }
-        .card:hover { 
+                .card:hover { 
             transform: translateY(-4px);
             box-shadow: 0 15px 50px rgba(99, 102, 241, 0.2);
             border-color: rgba(99, 102, 241, 0.3);
         }
-        .card h2 { 
+                .card h2 { 
             color: #f1f5f9;
             font-size: 1.5em;
             margin-bottom: 20px;
@@ -370,14 +383,14 @@
         .form-group {
             margin-bottom: 15px;
         }
-        .form-group label {
+                .form-group label {
             display: block;
             margin-bottom: 8px;
             font-weight: 600;
             color: #cbd5e1;
             font-size: 0.95em;
         }
-        .form-group input, .form-group select {
+                .form-group input, .form-group select {
             width: 100%;
             padding: 12px 16px;
             background: rgba(51, 65, 85, 0.5);
@@ -395,6 +408,10 @@
             border-color: #6366f1;
             background: rgba(51, 65, 85, 0.7);
             box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
         }
         
         .btn {
@@ -441,14 +458,14 @@
             transform: translateY(0);
             box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
         }
-        .btn-primary {
+                .btn-primary {
             background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
             box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
         }
         .btn-primary:hover {
             box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
         }
-        .btn-success {
+                .btn-success {
             background: linear-gradient(135deg, #10b981 0%, #059669 100%);
             box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
         }
@@ -456,13 +473,9 @@
             box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
         }
         .btn-warning {
-            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+            background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
         }
-        .btn-warning:hover {
-            box-shadow: 0 6px 20px rgba(245, 158, 11, 0.5);
-        }
-        .btn-danger {
+                .btn-danger {
             background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
             box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
         }
@@ -470,11 +483,7 @@
             box-shadow: 0 6px 20px rgba(239, 68, 68, 0.5);
         }
         .btn-info {
-            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
-        }
-        .btn-info:hover {
-            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.5);
+            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
         }
         .btn-danger:hover {
             background: linear-gradient(135deg, #c53030 0%, #9c2626 100%);
@@ -576,13 +585,10 @@
             border-collapse: collapse;
             margin: 0;
         }
-        .table th, .table td {
-            padding: 14px 16px;
-            text-align: left;
-            border-bottom: 1px solid rgba(148, 163, 184, 0.2);
-            white-space: nowrap;
+        .table th,         .table td {
+            color: #e2e8f0;
         }
-        .table th {
+                .table th {
             background: rgba(99, 102, 241, 0.15);
             font-weight: 600;
             color: #cbd5e1;
@@ -593,10 +599,7 @@
             font-size: 0.85em;
             letter-spacing: 0.5px;
         }
-        .table td {
-            color: #e2e8f0;
-        }
-        .table tr:hover {
+                .table tr:hover {
             background: rgba(99, 102, 241, 0.1);
         }
         .table td:first-child {
@@ -1745,7 +1748,7 @@
         }
         
         // Initialize band tracking with localStorage
-        const isCurrentlyHidden = {% if ap.ssid_visible %}false{% else %}true{% endif %};
+        const isCurrentlyHidden = {{ 'false' if ap.ssid_visible else 'true' }};
         const currentBand = '{{ ap.band }}';
         
         // Get or initialize the saved visible band (the band to use when SSID is visible)
@@ -2012,6 +2015,12 @@
         }
         
         async function activateTheme(themeName) {
+            // Hide theme modal IMMEDIATELY (synchronously)
+            const themeModal = document.getElementById('themeModal');
+            themeModal.style.visibility = 'hidden';
+            themeModal.style.opacity = '0';
+            themeModal.style.pointerEvents = 'none';
+            
             try {
                 const result = await Swal.fire({
                     title: 'Theme aktivieren?',
@@ -2022,25 +2031,38 @@
                     cancelButtonText: 'Abbrechen'
                 });
                 
-                if (result.isConfirmed) {
-                    const response = await fetch('/api/themes/activate', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({theme_name: themeName})
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        showToast('Theme aktiviert! Lade neu...', 'success');
-                        setTimeout(() => location.reload(), 1500);
-                    } else {
-                        showToast(data.error || 'Fehler beim Aktivieren', 'error');
-                    }
+                // Show theme modal again if user cancels
+                if (!result.isConfirmed) {
+                    themeModal.style.visibility = 'visible';
+                    themeModal.style.opacity = '1';
+                    themeModal.style.pointerEvents = 'auto';
+                    return;
+                }
+                
+                const response = await fetch('/api/themes/activate', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({theme_name: themeName})
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('Theme aktiviert! Lade neu...', 'success');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showToast(data.error || 'Fehler beim Aktivieren', 'error');
+                    themeModal.style.visibility = 'visible';
+                    themeModal.style.opacity = '1';
+                    themeModal.style.pointerEvents = 'auto';
                 }
             } catch (error) {
                 console.error('Error activating theme:', error);
                 showToast('Fehler beim Aktivieren des Themes', 'error');
+                const themeModal = document.getElementById('themeModal');
+                themeModal.style.visibility = 'visible';
+                themeModal.style.opacity = '1';
+                themeModal.style.pointerEvents = 'auto';
             }
         }
         
@@ -2105,6 +2127,12 @@
         }
         
         async function deleteTheme(themeName) {
+            // Hide theme modal IMMEDIATELY (synchronously)
+            const themeModal = document.getElementById('themeModal');
+            themeModal.style.visibility = 'hidden';
+            themeModal.style.opacity = '0';
+            themeModal.style.pointerEvents = 'none';
+            
             try {
                 const result = await Swal.fire({
                     title: 'Theme löschen?',
@@ -2116,25 +2144,41 @@
                     cancelButtonText: 'Abbrechen'
                 });
                 
-                if (result.isConfirmed) {
-                    const response = await fetch('/api/themes/delete', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({theme_name: themeName})
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        showToast('Theme gelöscht', 'success');
-                        loadThemes();
-                    } else {
-                        showToast(data.error || 'Fehler beim Löschen', 'error');
-                    }
+                // Show theme modal again if user cancels
+                if (!result.isConfirmed) {
+                    themeModal.style.visibility = 'visible';
+                    themeModal.style.opacity = '1';
+                    themeModal.style.pointerEvents = 'auto';
+                    return;
+                }
+                
+                const response = await fetch('/api/themes/delete', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({theme_name: themeName})
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('Theme gelöscht', 'success');
+                    loadThemes();
+                    themeModal.style.visibility = 'visible';
+                    themeModal.style.opacity = '1';
+                    themeModal.style.pointerEvents = 'auto';
+                } else {
+                    showToast(data.error || 'Fehler beim Löschen', 'error');
+                    themeModal.style.visibility = 'visible';
+                    themeModal.style.opacity = '1';
+                    themeModal.style.pointerEvents = 'auto';
                 }
             } catch (error) {
                 console.error('Error deleting theme:', error);
                 showToast('Fehler beim Löschen des Themes', 'error');
+                const themeModal = document.getElementById('themeModal');
+                themeModal.style.visibility = 'visible';
+                themeModal.style.opacity = '1';
+                themeModal.style.pointerEvents = 'auto';
             }
         }
         
@@ -2218,7 +2262,10 @@
                 timerProgressBar: true,
                 background: color,
                 color: 'white',
-                iconColor: 'white'
+                iconColor: 'white',
+                customClass: {
+                    container: 'swal-toast-container'
+                }
             });
         }
 
